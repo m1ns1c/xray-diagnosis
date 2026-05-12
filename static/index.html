@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>흉부 X-ray 분석기</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Apple SD Gothic Neo', sans-serif;
+            background: #0f1117;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        p.subtitle {
+            color: #888;
+            margin-bottom: 40px;
+            font-size: 14px;
+        }
+        .upload-box {
+            width: 100%;
+            max-width: 500px;
+            border: 2px dashed #333;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+            background: #1a1d27;
+        }
+        .upload-box:hover { border-color: #4f8ef7; }
+        .upload-box input { display: none; }
+        .upload-icon { font-size: 48px; margin-bottom: 12px; }
+        .upload-text { color: #888; font-size: 14px; }
+        .preview {
+            margin-top: 24px;
+            display: none;
+            width: 100%;
+            max-width: 500px;
+        }
+        .preview img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+        .btn {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 500px;
+            padding: 16px;
+            background: #4f8ef7;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            cursor: pointer;
+            display: none;
+            transition: background 0.3s;
+        }
+        .btn:hover { background: #3a7ae0; }
+        .result {
+            margin-top: 24px;
+            width: 100%;
+            max-width: 500px;
+            padding: 24px;
+            border-radius: 16px;
+            display: none;
+            text-align: center;
+        }
+        .result.normal { background: #0d2b1f; border: 1px solid #1a7a4a; }
+        .result.abnormal { background: #2b0d0d; border: 1px solid #7a1a1a; }
+        .result-icon { font-size: 48px; margin-bottom: 12px; }
+        .result-label { font-size: 24px; font-weight: bold; margin-bottom: 8px; }
+        .result.normal .result-label { color: #4caf50; }
+        .result.abnormal .result-label { color: #f44336; }
+        .result-confidence { color: #888; font-size: 14px; }
+        .result-message { margin-top: 12px; font-size: 13px; color: #aaa; }
+        .loading { display: none; margin-top: 20px; color: #888; font-size: 14px; }
+        .converting { 
+            margin-top: 12px; 
+            color: #888; 
+            font-size: 13px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>🫁 흉부 X-ray 분석기</h1>
+    <p class="subtitle">흉부 X-ray 이미지를 업로드하면 AI가 정상/비정상을 판별합니다</p>
+
+    <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept=".dcm,.png,.jpg,.jpeg" onchange="handleFile(event)">
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">클릭하여 이미지 업로드<br><small>.dcm, .png, .jpg 지원</small></div>
+    </div>
+
+    <div class="converting" id="converting">⏳ DICOM 파일 변환 중...</div>
+
+    <div class="preview" id="preview">
+        <img id="previewImg" src="" alt="X-ray 미리보기">
+    </div>
+
+    <button class="btn" id="analyzeBtn" onclick="analyze()">🔍 분석하기</button>
+    <div class="loading" id="loading">⏳ AI가 분석 중입니다...</div>
+
+    <div class="result" id="result">
+        <div class="result-icon" id="resultIcon"></div>
+        <div class="result-label" id="resultLabel"></div>
+        <div class="result-confidence" id="resultConfidence"></div>
+        <div class="result-message">※ 본 결과는 참고용이며 정확한 진단은 의사와 상담하세요</div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        async function handleFile(event) {
+            selectedFile = event.target.files[0];
+            if (!selectedFile) return;
+
+            const preview = document.getElementById('preview');
+            const previewImg = document.getElementById('previewImg');
+            const btn = document.getElementById('analyzeBtn');
+            const result = document.getElementById('result');
+            const converting = document.getElementById('converting');
+
+            result.style.display = 'none';
+            preview.style.display = 'none';
+            btn.style.display = 'none';
+
+            if (selectedFile.name.endsWith('.dcm') || selectedFile.name.endsWith('.jpg') || selectedFile.name.endsWith('.jpeg')) { {
+                converting.style.display = 'block';
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                try {
+                    const res = await fetch('http://127.0.0.1:8000/preview', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    previewImg.src = data.image;
+                    converting.style.display = 'none';
+                    preview.style.display = 'block';
+                } catch (err) {
+                    converting.style.display = 'none';
+                    alert('DICOM 변환 오류가 발생했습니다.');
+                    return;
+                }
+            } } else {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImg.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(selectedFile);
+            }
+
+            btn.style.display = 'block';
+        }
+
+        async function analyze() {
+            if (!selectedFile) return;
+
+            const btn = document.getElementById('analyzeBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+
+            btn.style.display = 'none';
+            loading.style.display = 'block';
+            result.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                loading.style.display = 'none';
+                result.style.display = 'block';
+
+                const isNormal = data.result === 'NORMAL';
+                result.className = 'result ' + (isNormal ? 'normal' : 'abnormal');
+                document.getElementById('resultIcon').textContent = isNormal ? '✅' : '⚠️';
+                document.getElementById('resultLabel').textContent = isNormal ? '정상' : '비정상 (폐렴 의심)';
+                document.getElementById('resultConfidence').textContent = '신뢰도: ' + data.confidence + '%';
+
+                btn.style.display = 'block';
+            } catch (err) {
+                loading.style.display = 'none';
+                alert('서버 오류가 발생했습니다.');
+                btn.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
